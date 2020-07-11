@@ -5,12 +5,11 @@ import torch
 import glob as gb
 import numpy as np
 from PIL import Image
-from tqdm import tqdm
 
 import model.resnet50_128 as model
 
 # hyper parameters
-batch_size = 16
+batch_size = 10
 mean = (131.0912, 103.8827, 91.4953)
 
 train_on_gpu = torch.cuda.is_available()
@@ -57,24 +56,29 @@ def chunks(l, n):
 
 def initialize_model():
     # Download the pytorch model and weights.
+    # Currently, it's cpu mode.
     network = model.resnet50_128(weights_path='./model/resnet50_128.pth').to(DEVICE)
     network.eval()
     return network
 
 
 def image_encoding(model, facepaths):
+    print('==> compute image-level feature encoding.')
     num_faces = len(facepaths)
     face_feats = np.empty((num_faces, 128))
     imgpaths = facepaths
     imgchunks = list(chunks(imgpaths, batch_size))
+    # print(num_faces, face_feats, imgpaths, imgchunks)
 
-    for c, imgs in tqdm(enumerate(imgchunks), total=len(imgchunks)):
+    for c, imgs in enumerate(imgchunks):
         im_array = np.array([load_data(path=i, shape=(224, 224, 3)) for i in imgs])
         f = model(torch.Tensor(im_array.transpose(0, 3, 1, 2)).to(DEVICE))[1].detach().cpu().numpy()[:, :, 0, 0]
         start = c * batch_size
         end = min((c + 1) * batch_size, num_faces)
         # This is different from the Keras model where the normalization has been done inside the model.
         face_feats[start:end] = f / np.sqrt(np.sum(f ** 2, -1, keepdims=True))
+        if c % 50 == 0:
+            print('-> finish encoding {}/{} images.'.format(c * batch_size, num_faces))
     return face_feats
 
 
