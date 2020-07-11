@@ -14,6 +14,7 @@ Jupyter ноутбук с решением задачи face similarity на д�
 
 Код получения глубоких фичей модели [pytorch_feature_extractor.py](https://github.com/care1e55/face_similarity/blob/master/pytorch_feature_extractor.py) взят из репозитория авторов и немного изменен - device CUDA, tqdm и пр.
 
+Accuracy модели на тестовом датасете 500 классов: 0,6
 
 TODO:
  - [ ] top5 prediction
