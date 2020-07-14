@@ -6,9 +6,10 @@ import glob as gb
 import numpy as np
 from PIL import Image
 from tqdm import tqdm
-
+from torchvision import transforms
+from facenet_pytorch import MTCNN
 import model.resnet50_128 as model
-
+from facenet_pytorch import MTCNN
 # hyper parameters
 batch_size = 16
 mean = (131.0912, 103.8827, 91.4953)
@@ -26,26 +27,36 @@ else:
 
 DEVICE = torch.device("cuda")
 
+mtcnn = MTCNN(image_size=224, select_largest=False, post_process=False, device=DEVICE)
 
 def load_data(path='', shape=None):
     short_size = 224.0
     crop_size = shape
     img = PIL.Image.open(path)
     im_shape = np.array(img.size)    # in the format of (width, height, *)
-    img = img.convert('RGB')
+    
+    img = mtcnn(img)
+    # print('shape: ', img.shape)
+    if img is None:
+        img = torch.zeros((3,224,224))
 
-    ratio = float(short_size) / np.min(im_shape)
-    img = img.resize(size=(int(np.ceil(im_shape[0] * ratio)),   # width
-                           int(np.ceil(im_shape[1] * ratio))),  # height
-                     resample=PIL.Image.BILINEAR)
+    img = img.permute(1, 2, 0).int().numpy()
+    # else:
+    # img = transforms.ToPILImage()(img)
+    # img = img.convert('RGB')
 
-    x = np.array(img)  # image has been transposed into (height, width)
-    newshape = x.shape[:2]
-    h_start = (newshape[0] - crop_size[0])//2
-    w_start = (newshape[1] - crop_size[1])//2
-    x = x[h_start:h_start+crop_size[0], w_start:w_start+crop_size[1]]
-    x = x - mean
-    return x
+    # ratio = float(short_size) / np.min(im_shape)
+    # img = img.resize(size=(int(np.ceil(im_shape[0] * ratio)),   # width
+    #                        int(np.ceil(im_shape[1] * ratio))),  # height
+    #                  resample=PIL.Image.BILINEAR)
+    # x = np.array(img)  # image has been transposed into (height, width)
+    # print('x.shape: ', x.shape)
+    # newshape = x.shape[:2]
+    # h_start = (newshape[0] - crop_size[0])//2
+    # w_start = (newshape[1] - crop_size[1])//2
+    # x = x[h_start:h_start+crop_size[0], w_start:w_start+crop_size[1]]
+    # x = x - mean
+    return img
 
 
 def chunks(l, n):
