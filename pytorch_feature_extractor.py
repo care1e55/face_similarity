@@ -28,6 +28,15 @@ else:
 DEVICE = torch.device("cuda")
 
 mtcnn = MTCNN(image_size=224, select_largest=False, post_process=False, device=DEVICE)
+# mtcnn = MTCNN(
+#     image_size=224,
+#     device=DEVICE,
+#     select_largest=False,
+#     selection_method = "center_weighted_size",
+#     # post_process=False,
+#     margin = 14,
+#     # min_face_size = 20,
+# )
 
 def load_data(path='', shape=None):
     short_size = 224.0
@@ -36,27 +45,13 @@ def load_data(path='', shape=None):
     im_shape = np.array(img.size)    # in the format of (width, height, *)
     
     img = mtcnn(img)
-    # print('shape: ', img.shape)
     if img is None:
         img = torch.zeros((3,224,224))
+        pass
 
     img = img.permute(1, 2, 0).int().numpy()
-    # else:
-    # img = transforms.ToPILImage()(img)
-    # img = img.convert('RGB')
 
-    # ratio = float(short_size) / np.min(im_shape)
-    # img = img.resize(size=(int(np.ceil(im_shape[0] * ratio)),   # width
-    #                        int(np.ceil(im_shape[1] * ratio))),  # height
-    #                  resample=PIL.Image.BILINEAR)
-    # x = np.array(img)  # image has been transposed into (height, width)
-    # print('x.shape: ', x.shape)
-    # newshape = x.shape[:2]
-    # h_start = (newshape[0] - crop_size[0])//2
-    # w_start = (newshape[1] - crop_size[1])//2
-    # x = x[h_start:h_start+crop_size[0], w_start:w_start+crop_size[1]]
-    # x = x - mean
-    return img
+    return img - mean
 
 
 def chunks(l, n):
