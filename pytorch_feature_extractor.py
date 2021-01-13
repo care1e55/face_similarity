@@ -9,11 +9,12 @@ from tqdm import tqdm
 from torchvision import transforms
 from facenet_pytorch import MTCNN
 # import model.resnet50_128 as model
-# import model.resnet50_2048 as model
-import model.senet50_2048 as model
+import model.resnet50_2048 as model_resnet
+import model.senet50_2048 as model_senet
 from facenet_pytorch import MTCNN
 # hyper parameters
-batch_size = 16
+batch_size = 4
+# batch_size = 16
 mean = (131.0912, 103.8827, 91.4953)
 
 train_on_gpu = torch.cuda.is_available()
@@ -63,19 +64,27 @@ def chunks(l, n):
         yield l[i:i+n]
 
 
-def initialize_model():
+def initialize_model_res():
+    # Download the pytorch model and weights.
+    # network = model.resnet50_128(weights_path='./model/resnet50_128.pth').to(DEVICE)
+    network = model_resnet.resnet50_ft(weights_path='./model/resnet50_2048.pth').to(DEVICE)
+    network.eval()
+    return network
+
+def initialize_model_sen():
     # Download the pytorch model and weights.
     # network = model.resnet50_128(weights_path='./model/resnet50_128.pth').to(DEVICE)
     # network = model.resnet50_ft(weights_path='./model/resnet50_2048.pth').to(DEVICE)
-    network = model.senet50_ft(weights_path='./model/senet50_2048.pth').to(DEVICE)
+    network = model_senet.senet50_ft(weights_path='./model/senet50_2048.pth').to(DEVICE)
     network.eval()
     return network
 
 
-def image_encoding(model, facepaths):
+def image_encoding(model_res, model_sen, facepaths):
     num_faces = len(facepaths)
     # face_feats = np.empty((num_faces, 128))
-    face_feats = np.empty((num_faces, 2048))
+    # face_feats = np.empty((num_faces, 2048))
+    face_feats = np.empty((num_faces, 2*2048))
     imgpaths = facepaths
     imgchunks = list(chunks(imgpaths, batch_size))
 
@@ -90,7 +99,13 @@ def image_encoding(model, facepaths):
 
         # f = model(torch.Tensor(im_array.transpose(0, 3, 1, 2)).to(DEVICE))[1].detach().cpu().numpy()[:, :, 0, 0]
         # print(f.shape)
-        f = model(torch.Tensor(im_array.transpose(0, 3, 1, 2)).to(DEVICE)).detach().cpu().numpy()[:, :, 0, 0]
+        f_sen = model_sen(torch.Tensor(im_array.transpose(0, 3, 1, 2)).to(DEVICE))
+        f_res = model_res(torch.Tensor(im_array.transpose(0, 3, 1, 2)).to(DEVICE))
+        f = torch.cat((f_sen, f_res), dim=1).detach().cpu().numpy()[:, :, 0, 0]
+        # f = torch.cat((f_sen, f_res), dim=1)
+        # print(f.size())
+        # f = f.detach().cpu().numpy()[:, :, 0, 0]
+
         # print(f.shape)
         start = c * batch_size
         end = min((c + 1) * batch_size, num_faces)
