@@ -8,10 +8,13 @@ from PIL import Image
 from tqdm import tqdm
 from torchvision import transforms
 from facenet_pytorch import MTCNN
-import model.resnet50_128 as model
+# import model.resnet50_128 as model
+import model.resnet50_2048 as model_resnet
+import model.senet50_2048 as model_senet
 from facenet_pytorch import MTCNN
 # hyper parameters
-batch_size = 16
+batch_size = 4
+# batch_size = 16
 mean = (131.0912, 103.8827, 91.4953)
 
 train_on_gpu = torch.cuda.is_available()
@@ -28,6 +31,8 @@ else:
 DEVICE = torch.device("cuda")
 
 mtcnn = MTCNN(image_size=224, select_largest=False, post_process=False, device=DEVICE)
+trans1 = transforms.Resize((224,224))
+trans2 = transforms.ToTensor()
 
 def load_data(path='', shape=None):
     short_size = 224.0
@@ -36,27 +41,14 @@ def load_data(path='', shape=None):
     im_shape = np.array(img.size)    # in the format of (width, height, *)
     
     img = mtcnn(img)
-    # print('shape: ', img.shape)
     if img is None:
-        img = torch.zeros((3,224,224))
+        # img = torch.zeros((3,224,224))
+        img = trans1(PIL.Image.open(path))
+        img = trans2(img)
 
     img = img.permute(1, 2, 0).int().numpy()
-    # else:
-    # img = transforms.ToPILImage()(img)
-    # img = img.convert('RGB')
 
-    # ratio = float(short_size) / np.min(im_shape)
-    # img = img.resize(size=(int(np.ceil(im_shape[0] * ratio)),   # width
-    #                        int(np.ceil(im_shape[1] * ratio))),  # height
-    #                  resample=PIL.Image.BILINEAR)
-    # x = np.array(img)  # image has been transposed into (height, width)
-    # print('x.shape: ', x.shape)
-    # newshape = x.shape[:2]
-    # h_start = (newshape[0] - crop_size[0])//2
-    # w_start = (newshape[1] - crop_size[1])//2
-    # x = x[h_start:h_start+crop_size[0], w_start:w_start+crop_size[1]]
-    # x = x - mean
-    return img
+    return img - mean
 
 
 def chunks(l, n):
@@ -66,22 +58,31 @@ def chunks(l, n):
         yield l[i:i+n]
 
 
-def initialize_model():
-    # Download the pytorch model and weights.
-    network = model.resnet50_128(weights_path='./model/resnet50_128.pth').to(DEVICE)
+def initialize_model_res():
+    network = model_resnet.resnet50_ft(weights_path='./model/resnet50_2048.pth').to(DEVICE)
+    network.eval()
+    return network
+
+def initialize_model_sen():
+    network = model_senet.senet50_ft(weights_path='./model/senet50_2048.pth').to(DEVICE)
     network.eval()
     return network
 
 
-def image_encoding(model, facepaths):
+def image_encoding(model_res, model_sen, facepaths):
     num_faces = len(facepaths)
-    face_feats = np.empty((num_faces, 128))
+
+    face_feats = np.empty((num_faces, 2*2048))
     imgpaths = facepaths
     imgchunks = list(chunks(imgpaths, batch_size))
 
     for c, imgs in tqdm(enumerate(imgchunks), total=len(imgchunks)):
         im_array = np.array([load_data(path=i, shape=(224, 224, 3)) for i in imgs])
-        f = model(torch.Tensor(im_array.transpose(0, 3, 1, 2)).to(DEVICE))[1].detach().cpu().numpy()[:, :, 0, 0]
+
+        f_sen = model_sen(torch.Tensor(im_array.transpose(0, 3, 1, 2)).to(DEVICE))
+        f_res = model_res(torch.Tensor(im_array.transpose(0, 3, 1, 2)).to(DEVICE))
+        f = torch.cat((f_sen, f_res), dim=1).detach().cpu().numpy()[:, :, 0, 0]
+
         start = c * batch_size
         end = min((c + 1) * batch_size, num_faces)
         # This is different from the Keras model where the normalization has been done inside the model.
